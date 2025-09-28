@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Helmet Detector</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to top, #fff5b4, #d9d9d9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        h1 {
+            margin-top: 20px;
+            font-size: 2rem;
+        }
+
+        #webcam-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            border: 5px solid #333;
+            border-radius: 15px;
+            background: #fff;
+            padding: 10px;
+        }
+
+        .fade-in {
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        #label-container {
+            display: flex;
+            flex-direction: row;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        button {
+            background-color: #222;
+            color: #f5f5dc;
+            padding: 10px 20px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #444;
+        }
+
+        .helmet-icon {
+            width: 50px;
+            height: 50px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .label-entry {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            width: 140px;
+        }
+
+        .bar-container {
+            width: 100%;
+            height: 20px;
+            background-color: #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background-color: #3a3a3a;
+            text-align: right;
+            padding-right: 5px;
+            color: white;
+            line-height: 20px;
+            border-radius: 10px 0 0 10px;
+        }
+
+        .helmet-label {
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 4px;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>HELMET DETECTOR</h1>
+    <button id="start-btn" type="button" onclick="init()">Start</button>
+    <button id="exit-btn" style="display: none;" onclick="exitApp()">Exit</button>
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <script type="text/javascript">
+        const URL = "https://teachablemachine.withgoogle.com/models/3zGPsE5py/";
+        let model, webcam, labelContainer, maxPredictions;
+
+        async function init() {
+            document.getElementById("start-btn").style.display = "none";
+            document.getElementById("exit-btn").style.display = "inline-block";
+
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const flip = true;
+            webcam = new tmImage.Webcam(300, 300, flip);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            const webcamContainer = document.getElementById("webcam-container");
+            webcamContainer.innerHTML = "";
+            webcam.canvas.classList.add("fade-in");
+            webcamContainer.appendChild(webcam.canvas);
+
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = "";
+            const classLabels = model.getClassLabels();
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const labelEntry = document.createElement("div");
+                labelEntry.className = "label-entry";
+
+                let iconUrl = "";
+                const className = classLabels[i].toLowerCase();
+                let displayName = classLabels[i];
+
+                if (className.includes("nut")) {
+                    iconUrl = "https://kaking.ph/image/cache/catalog/products/sports%20and%20outdoors/helmets/nutshell%20helmets/23150300888-P435----700x700.png";
+                    displayName = "Nutshell Helmet";
+                } else if (className.includes("half")) {
+                    iconUrl = "https://smkhelmets.com/wp-content/uploads/2023/10/MA-251.png";
+                    displayName = "Half Face Helmet";
+                } else if (className.includes("full")) {
+                    iconUrl = "https://smkhelmets.com/wp-content/uploads/2024/10/NOVA-ANTHRACITE-GLDA-600.webp";
+                    displayName = "Full Face Helmet";
+                } else {
+                    iconUrl = "https://cdn-icons-png.flaticon.com/512/189/189718.png";
+                }
+
+                labelEntry.innerHTML = `
+                    <div class='helmet-icon' style='background-image: url(${iconUrl})'></div>
+                    <div class='bar-container'><div id='bar-${i}' class='bar-fill'>0%</div></div>
+                    <div class='helmet-label'>${displayName}</div>
+                `;
+                labelContainer.appendChild(labelEntry);
+            }
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+            for (let i = 0; i < maxPredictions; i++) {
+                const prob = prediction[i].probability;
+                const percent = Math.round(prob * 100);
+                const bar = document.getElementById(`bar-${i}`);
+                bar.style.width = percent + "%";
+                bar.innerText = percent + "%";
+            }
+        }
+
+        function exitApp() {
+            webcam.stop();
+            document.getElementById("webcam-container").innerHTML = "";
+            document.getElementById("label-container").innerHTML = "";
+            document.getElementById("exit-btn").style.display = "none";
+            document.getElementById("start-btn").style.display = "inline-block";
+        }
+    </script>
+</body>
+</html>
